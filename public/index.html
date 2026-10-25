@@ -1,0 +1,988 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Sink the Fleet</title>
+<meta name="description" content="A two-player naval battle. Hide your fleet, call your shots, earn cluster bombs and climb the leaderboard.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a1d2c'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23e2aa4c' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%23e5483f'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+
+/* Layout: one centred column on a night-sea plotting table; the two grids sit side by side on wide screens and stack on phones */
+:root{
+  --sea:#0a1d2c; --deck:#102a3e; --deck-hover:#183c57; --line:#25506c;
+  --ink:#e6eef2; --muted:#8eabbe; --brass:#e2aa4c; --brass-ink:#1a1206;
+  --hit:#e5483f; --hit-glow:rgba(229,72,63,.35); --peg:#f1eee4;
+  --hull:#6c7d8c; --hull-edge:#93a3b0; --wreck:#45272a;
+  --ok:rgba(86,196,140,.5); --bad:rgba(229,72,63,.45);
+  --display:"Saira Stencil One","Arial Black",Impact,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{background:var(--sea);color:var(--ink)}
+body{font-family:var(--body);font-size:16px;line-height:1.45;
+  background-image:radial-gradient(ellipse at 50% -10%,rgba(226,170,76,.08),transparent 60%);min-height:100%}
+.app{max-width:1000px;margin:0 auto;padding-block:20px 56px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:22px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(30px,6.4vw,50px);line-height:.95;margin:0;text-wrap:balance}
+h1 span{color:var(--brass)}
+h2{font-family:var(--display);font-weight:400;font-size:clamp(22px,4vw,30px);line-height:1.05;margin:0;text-wrap:balance}
+h3{margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+p{margin:0;max-width:62ch}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono)}
+#view{display:flex;flex-direction:column;gap:22px}
+
+.btn{font:600 15px/1 var(--body);letter-spacing:.02em;border-radius:8px;padding:12px 18px;cursor:pointer;
+  border:1px solid var(--brass);background:var(--brass);color:var(--brass-ink);min-height:44px}
+.btn:hover:not(:disabled){filter:brightness(1.08)}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover:not(:disabled){border-color:var(--muted)}
+.btn.small{padding:8px 12px;font-size:13px;min-height:36px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.link{background:none;border:0;color:var(--muted);font:500 14px var(--body);text-decoration:underline;cursor:pointer;padding:6px 0}
+.link:hover{color:var(--ink)}
+:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
+.mode{border:1px solid var(--line);border-radius:12px;padding:22px;display:flex;flex-direction:column;gap:12px;background:var(--deck)}
+.mode .tag{font-family:var(--mono);font-size:12px;color:var(--brass);letter-spacing:.08em;text-transform:uppercase}
+.mode p{color:var(--muted);flex:1}
+.fleetspec{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:14px;color:var(--muted)}
+.fleetspec b{color:var(--ink);font-weight:600}
+
+.status{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;padding:12px 16px;background:var(--deck)}
+.status.go{border-color:var(--brass)}
+.status .dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex:none}
+.status.go .dot{background:var(--brass);box-shadow:0 0 0 4px rgba(226,170,76,.2)}
+.status .txt{flex:1;min-width:0;font-weight:600}
+.status .txt small{display:block;font-weight:400;color:var(--muted);font-size:14px}
+
+.play{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start}
+@media (max-width:780px){.play{grid-template-columns:1fr}}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.side-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+
+.board{display:grid;grid-template-columns:20px repeat(10,minmax(0,1fr));gap:2px;width:100%;max-width:440px;font-family:var(--mono);user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.lbl{font-size:11px;color:var(--muted);display:grid;place-items:center;min-height:16px}
+.cell{aspect-ratio:1;background:var(--deck);border:1px solid var(--line);border-radius:3px;padding:0;display:grid;place-items:center;color:inherit;min-width:0}
+button.cell{cursor:crosshair}
+button.cell:hover{background:var(--deck-hover)}
+.cell.ship{background:var(--hull);border-color:var(--hull-edge)}
+.cell.wreck{background:var(--wreck);border-color:var(--hit)}
+.cell.ok{background:var(--ok)}
+.cell.bad{background:var(--bad)}
+.cell.last{box-shadow:inset 0 0 0 2px var(--brass)}
+.peg{width:44%;aspect-ratio:1;border-radius:50%;display:block}
+.peg.miss{background:var(--peg);opacity:.8}
+.peg.hit{background:var(--hit);box-shadow:0 0 0 3px var(--hit-glow)}
+.peg.pending{background:var(--brass);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+
+.roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px 16px}
+.shiprow{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px}
+.shiprow .pips{display:flex;gap:3px}
+.shiprow .pips i{width:9px;height:9px;border-radius:2px;background:var(--hull)}
+.shiprow.down .nm{text-decoration:line-through;color:var(--muted)}
+.shiprow.down .pips i{background:var(--hit)}
+
+.place{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:780px){.place{grid-template-columns:1fr}}
+.dock{display:flex;flex-direction:column;gap:12px}
+.shipbtn{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;
+  font:500 15px var(--body);color:var(--ink);background:var(--deck);border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;min-height:44px}
+.shipbtn.sel{border-color:var(--brass);box-shadow:0 0 0 1px var(--brass)}
+.shipbtn.done{color:var(--muted)}
+.shipbtn .pips{display:flex;gap:3px}
+.shipbtn .pips i{width:12px;height:12px;border-radius:2px;background:var(--hull)}
+.shipbtn.done .pips i{background:var(--line)}
+.hint{font-size:14px;color:var(--muted)}
+
+.cover{border:1px dashed var(--line);border-radius:14px;padding:clamp(28px,7vw,64px) 22px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px}
+.seats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:16px}
+.seat{border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px;background:var(--deck)}
+.seat .who{font-size:20px;font-weight:600}
+.seat.mine{border-color:var(--brass)}
+.field{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)}
+.field input{font:500 16px var(--body);color:var(--ink);background:var(--sea);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-height:44px}
+.names{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:14px;max-width:520px}
+
+.banner{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:50;pointer-events:none;
+  background:var(--sea);border:2px solid var(--brass);border-radius:14px;padding:18px 26px;text-align:center;
+  box-shadow:0 20px 60px rgba(0,0,0,.55);animation:pop .28s ease-out;max-width:calc(100vw - 32px)}
+.banner.sunk,.banner.win{border-color:var(--hit)}
+.b-big{font-family:var(--display);font-size:clamp(26px,7vw,48px);line-height:1;color:var(--ink)}
+.banner.sunk .b-big,.banner.win .b-big{color:var(--hit)}
+.banner.miss .b-big{color:var(--muted)}
+.b-small{margin-top:8px;color:var(--muted);font-size:15px}
+@keyframes pop{from{transform:translate(-50%,-50%) scale(.85);opacity:0}}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;
+  background:var(--deck);border:1px solid var(--line);border-radius:10px;padding:10px 16px;font-size:14px;max-width:calc(100vw - 32px)}
+.hdr-ctl{gap:8px}
+.toggle{font:600 13px var(--body);color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer;min-height:34px}
+.toggle[aria-pressed="true"]{color:var(--ink);border-color:var(--brass)}
+.toggle[aria-pressed="true"]::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--brass);margin-right:7px;vertical-align:1px}
+.recap{display:flex;flex-direction:column;gap:18px;border-top:1px solid var(--line);padding-top:22px}
+.badge{font:600 11px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--brass-ink);background:var(--brass);border-radius:999px;padding:3px 9px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0;max-width:440px}
+.stats div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0}
+.stats dt{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.stats dd{margin:2px 0 0;font:600 20px var(--mono);font-variant-numeric:tabular-nums}
+@media (max-width:420px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.log{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.log li{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:baseline}
+.bombbar{display:flex;align-items:center;gap:12px;border:1px solid var(--brass);border-radius:10px;padding:10px 12px;background:var(--deck);max-width:440px;box-sizing:border-box}
+.bombbar.armed{border-color:var(--hit);box-shadow:0 0 0 1px var(--hit)}
+.bombbar .txt{flex:1;min-width:0;display:flex;flex-direction:column}
+.bombbar small{color:var(--muted);font-size:13px}
+.bombhint{max-width:440px;margin:0}
+.board.armed .cell{cursor:cell}
+.cell.blast{background:var(--bad)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--deck)}
+.lb{width:100%;border-collapse:collapse;font-size:15px;min-width:620px}
+.lb th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:right;padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+.lb td{padding:12px 14px;text-align:right;border-bottom:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.lb tr:last-child td{border-bottom:0}
+.lb th:nth-child(-n+2),.lb td:nth-child(-n+2){text-align:left}
+.lb td.who{font-family:var(--body);font-weight:600}
+.lb tr.top td{color:var(--brass)}
+.lb tr.top td.who::after{content:"Admiral";margin-left:10px;font:600 10px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--brass-ink);background:var(--brass);border-radius:999px;padding:2px 8px;vertical-align:2px}
+.streak-w{color:var(--brass)}
+.streak-l{color:var(--hit)}
+@media (prefers-reduced-motion:reduce){.banner,.peg.pending{animation:none}}
+
+.invite{font-family:var(--mono);font-size:14px;overflow-wrap:anywhere;margin:0}
+.invite-box{max-width:520px}
+.invite-box .code{font-family:var(--mono);font-size:34px;letter-spacing:.25em;color:var(--brass);font-weight:600}
+.codeinput{text-transform:uppercase;letter-spacing:.25em;font-family:var(--mono)!important}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Sink the <span>Fleet</span></h1>
+    <div class="row hdr-ctl">
+      <button class="toggle" id="musicBtn" type="button" aria-pressed="true">Music</button>
+      <button class="toggle" id="sfxBtn" type="button" aria-pressed="true">Effects</button>
+      <button class="link" id="menuBtn" type="button" hidden>Back to menu</button>
+    </div>
+  </header>
+  <main id="view"></main>
+</div>
+<div id="banner" class="banner" hidden></div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="rules.js"></script>
+<script>
+
+const {COLS, SHIPS, coord, cellsFor, fits, randomFleet, resolveShot, resolvePending, allSunk, blastCells, bombState, planShots, statsOf} = Rules;
+const turnsOf = Rules.turns;
+const $ = s => document.querySelector(s);
+const view = $("#view");
+// Like replaceChildren, but skips the null placeholders used for optional parts of a screen.
+const setView = (...kids) => view.replaceChildren(...kids.filter(k => k != null && k !== false));
+
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(k));
+  return e;
+}
+const pips = n => h("span", {class:"pips"}, Array.from({length:n}, () => h("i")));
+
+const sunkIds = shots => new Set(shots.filter(s => s.res === "sunk").map(s => s.shipId));
+
+// ---------- shared UI ----------
+function makeBoard({ships = [], shots = [], onCell, label, allLive}) {
+  const occ = new Set(); ships.forEach(s => s.cells.forEach(i => occ.add(i)));
+  const wreck = new Set(); shots.forEach(s => s.res === "sunk" && s.cells && s.cells.forEach(i => wreck.add(i)));
+  const shotAt = new Map(shots.map(s => [s.i, s]));
+  const lastTurn = new Set((turnsOf(shots).slice(-1)[0] || []).map(s => s.i));
+  const grid = h("div", {class:"board", role:"grid", "aria-label":label});
+  grid.append(h("span", {class:"lbl"}));
+  for (let c = 0; c < 10; c++) grid.append(h("span", {class:"lbl", text:COLS[c]}));
+  grid.cells = [];
+  for (let r = 0; r < 10; r++) {
+    grid.append(h("span", {class:"lbl", text:String(r + 1)}));
+    for (let c = 0; c < 10; c++) {
+      const i = r * 10 + c, s = shotAt.get(i), live = onCell && (!s || allLive);
+      const cell = h(live ? "button" : "span", {
+        class:"cell" + (occ.has(i) ? " ship" : "") + (wreck.has(i) ? " wreck" : "") + (lastTurn.has(i) ? " last" : ""),
+        type: live ? "button" : null,
+        "aria-label": coord(i) + (s ? " " + (s.res || "awaiting report") : ""),
+        onclick: live ? () => onCell(i) : null,
+      });
+      if (s) cell.append(h("span", {class:"peg " + (s.res == null ? "pending" : s.res === "miss" ? "miss" : "hit")}));
+      grid.cells.push(cell); grid.append(cell);
+    }
+  }
+  return grid;
+}
+function roster(title, downIds) {
+  return h("div", {class:"side"}, h("h3", {text:title}),
+    h("div", {class:"roster"}, SHIPS.map(s => h("div", {class:"shiprow" + (downIds.has(s.id) ? " down" : "")},
+      h("span", {class:"nm", text:s.name}), pips(s.len)))));
+}
+function statusBar(text, sub, go) {
+  return h("div", {class:"status" + (go ? " go" : ""), role:"status"}, h("span", {class:"dot"}),
+    h("div", {class:"txt"}, text, sub ? h("small", {text:sub}) : null));
+}
+let bannerT;
+function announce(big, small, kind) {
+  const b = $("#banner");
+  b.replaceChildren(h("div", {class:"b-big", text:big}), small ? h("div", {class:"b-small", text:small}) : null);
+  b.className = "banner " + (kind || ""); b.hidden = false;
+  b.style.animation = "none"; void b.offsetWidth; b.style.animation = "";
+  clearTimeout(bannerT);
+  bannerT = setTimeout(() => b.hidden = true, kind === "sunk" || kind === "win" ? 2800 : 1400);
+}
+let toastT;
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3500);
+}
+function shotBanner(shot, shooterIsYou, shooterName, targetName) {
+  const at = coord(shot.i);
+  setTimeout(() => Sound.result(shot.res), shooterIsYou ? 550 : 0);
+  if (shot.res === "sunk") {
+    if (shooterIsYou) announce(`You sank my ${shot.ship.toLowerCase()}!`, `${targetName}'s ${shot.ship} is down`, "sunk");
+    else announce(`${shooterName} sank your ${shot.ship.toLowerCase()}!`, `Shot at ${at}`, "sunk");
+  } else if (shot.res === "hit") announce(`Hit at ${at}!`, shooterIsYou ? null : `${shooterName} found one of your ships`, "hit");
+  else announce(`Miss at ${at}`, shooterIsYou ? null : `${shooterName} missed`, "miss");
+}
+
+// Announces one turn: a single shot, or every square a cluster bomb covered.
+function turnBanner(turn, shooterIsYou, shooterName, targetName) {
+  if (!turn[0].b) return shotBanner(turn[0], shooterIsYou, shooterName, targetName);
+  const hits = turn.filter(s => s.res === "hit" || s.res === "sunk").length, sunk = turn.filter(s => s.res === "sunk");
+  setTimeout(() => { Sound.cluster(); if (sunk.length) setTimeout(Sound.sunk, 700); }, shooterIsYou ? 450 : 0);
+  const sub = `Cluster bomb: ${hits} hit${hits === 1 ? "" : "s"} across ${turn.length} squares`;
+  if (sunk.length) {
+    const names = sunk.map(s => s.ship.toLowerCase()).join(" and ");
+    announce(shooterIsYou ? `You sank my ${names}!` : `${shooterName} sank your ${names}!`, sub, "sunk");
+  } else if (hits) announce(`Cluster bomb: ${hits} hit${hits === 1 ? "" : "s"}!`, shooterIsYou ? null : `${shooterName} bombed your waters`, "hit");
+  else announce("Cluster bomb missed", shooterIsYou ? "Nothing in that block" : `${shooterName}'s bomb found nothing`, "miss");
+}
+function describeTurn(turn, name) {
+  if (!turn[0].b) {
+    const s = turn[0];
+    return `${name} fired at ${coord(s.i)}: ${s.res === "sunk" ? "sank your " + s.ship : s.res}.`;
+  }
+  const hits = turn.filter(s => s.res === "hit" || s.res === "sunk").length, sunk = turn.filter(s => s.res === "sunk");
+  return `${name} dropped a cluster bomb: ${hits} hit${hits === 1 ? "" : "s"}${sunk.length ? ", sank your " + sunk.map(s => s.ship).join(" and ") : ""}.`;
+}
+const bombEarnedBanner = stillRelevant => setTimeout(() => { if (stillRelevant()) announce("Cluster bomb earned!", "Two ships sunk without a miss. Use it on your next turn.", "hit"); }, 3000);
+
+// The cluster-bomb control shown above the enemy board.
+function bombControl(shots, armed, canFire, onToggle) {
+  const st = bombState(shots);
+  if (st.ready < 1) return h("p", {class:"hint bombhint", text: st.progress ? "One more ship sunk without a miss earns a cluster bomb." : "Sink two ships in a row without a miss to earn a cluster bomb."});
+  return h("div", {class:"bombbar" + (armed ? " armed" : "")},
+    h("div", {class:"txt"}, h("strong", {text: armed ? "Cluster bomb armed" : `Cluster bomb ready${st.ready > 1 ? ` (${st.ready})` : ""}`}),
+      h("small", {text: armed ? "Tap a square. It hits that square and the eight around it." : "Hits a 3 × 3 block of squares in one turn."})),
+    h("button", {type:"button", class:"btn small" + (armed ? " ghost" : ""), disabled:!canFire, onclick:onToggle}, armed ? "Cancel" : "Arm it"));
+}
+function armPreview(board, armed) {
+  if (!armed) return board;
+  board.classList.add("armed");
+  board.cells.forEach((cell, i) => cell.addEventListener("pointerenter", () => {
+    board.cells.forEach(c => c.classList.remove("blast"));
+    blastCells(i).forEach(x => board.cells[x].classList.add("blast"));
+  }));
+  board.addEventListener("pointerleave", () => board.cells.forEach(c => c.classList.remove("blast")));
+  return board;
+}
+
+// ---------- recap ----------
+const stat = (k, v) => h("div", null, h("dt", {text:k}), h("dd", {text:String(v)}));
+// P: two players {name, fleet (null if not revealed yet), fired}; first/winner are indexes into P.
+function recap(P, first, winner) {
+  const log = [];
+  P.forEach((p, k) => turnsOf(p.fired).forEach((turn, j) => turn.forEach(s => {
+    if (s.res === "sunk") log.push({move: k === first ? 2 * j + 1 : 2 * j + 2, by:p.name, target:P[1 - k].name, ship:s.ship, at:coord(s.i) + (s.b ? " (cluster bomb)" : "")});
+  })));
+  log.sort((a, b) => a.move - b.move);
+  return h("section", {class:"recap"},
+    h("div", {class:"side"}, h("h2", {text:"Battle recap"}),
+      h("p", {class:"muted", text:"Both fleets uncovered, with every shot that was fired at them."})),
+    h("div", {class:"play"}, [winner, 1 - winner].map(k => {
+      const p = P[k], st = statsOf(p.fired);
+      return h("div", {class:"side"},
+        h("div", {class:"side-head"}, h("h3", {text:`${p.name}'s fleet`}), k === winner ? h("span", {class:"badge", text:"Winner"}) : null),
+        makeBoard({ships:p.fleet || [], shots:P[1 - k].fired, label:`${p.name}'s fleet`}),
+        p.fleet ? null : h("p", {class:"hint", text:`${p.name}'s ship positions show up here once their page is open.`}),
+        h("h3", {text:`${p.name}'s shooting`}),
+        h("dl", {class:"stats"}, stat("Shots", st.fired), stat("Hits", st.hits), stat("Accuracy", st.acc + "%"), stat("Best streak", st.best)));
+    })),
+    log.length ? h("div", {class:"side"}, h("h3", {text:"Ships sunk, in order"}),
+      h("ol", {class:"log"}, log.map(e => h("li", null, h("span", {class:"mono muted", text:`Move ${e.move}`}), `${e.by} sank ${e.target}'s ${e.ship} at ${e.at}`)))) : null);
+}
+
+// ---------- sound ----------
+// Everything is synthesised with Web Audio, so there are no sound files to load.
+const Sound = (() => {
+  const prefs = {sfx:true, music:true};
+  try { Object.assign(prefs, JSON.parse(localStorage.getItem("bs-sound") || "{}")); } catch (e) {}
+  const save = () => { try { localStorage.setItem("bs-sound", JSON.stringify(prefs)); } catch (e) {} };
+  const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+  let ctx = null, master, sfxBus, musicBus, verbSend, noiseBuf, brownBuf, grit, timer = null, nextBar = 0, bar = 0;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+
+  function ensure() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+      master = ctx.createGain(); master.gain.value = .9;
+      const comp = ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination);
+      // A generated "open sea" reverb gives the blasts and splashes a sense of distance.
+      const verb = ctx.createConvolver(), len = ctx.sampleRate * 2.8;
+      const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+      for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6); }
+      verb.buffer = ir;
+      verbSend = ctx.createGain(); verbSend.gain.value = .28; verbSend.connect(verb); verb.connect(master);
+      sfxBus = ctx.createGain(); sfxBus.connect(master); sfxBus.connect(verbSend);
+      musicBus = ctx.createGain(); musicBus.gain.value = 0; musicBus.connect(master);
+      // White noise for hiss and spray; brown noise (deep, rumbly) for blasts and surging water.
+      noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      brownBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const w = noiseBuf.getChannelData(0), b = brownBuf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < w.length; i++) { w[i] = Math.random() * 2 - 1; last = (last + .02 * w[i]) / 1.02; b[i] = last * 3.5; }
+      grit = ctx.createWaveShaper();
+      const curve = new Float32Array(1024);
+      for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = (1 + 18) * x / (1 + 18 * Math.abs(x)); }
+      grit.curve = curve; grit.connect(sfxBus);
+    }
+    if (ctx.state === "suspended" && !document.hidden) ctx.resume();
+    return ctx;
+  }
+  function out(node, pan, bus) {
+    if (pan != null && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = pan; node.connect(p); p.connect(bus); }
+    else node.connect(bus);
+  }
+  function env(g, t, peak, attack, dur) {
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + attack);
+    g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  }
+  function noise(t, dur, {type = "lowpass", f0 = 2000, f1 = 200, q = 1, peak = .5, attack = .005, brown = false, pan}, bus = sfxBus) {
+    const src = ctx.createBufferSource(); src.buffer = brown ? brownBuf : noiseBuf; src.loop = true;
+    src.loopStart = 0; src.playbackRate.value = rnd(.92, 1.08);
+    const f = ctx.createBiquadFilter(); f.type = type; f.Q.value = q;
+    f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const g = ctx.createGain(); env(g, t, peak, attack, dur);
+    src.connect(f); f.connect(g); out(g, pan, bus); src.start(t, rnd(0, 1.5)); src.stop(t + dur + .05);
+  }
+  function tone(t, freq, dur, {type = "sine", peak = .3, attack = .01, glide, pan}, bus = sfxBus) {
+    const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + dur);
+    const g = ctx.createGain(); env(g, t, peak, attack, dur);
+    o.connect(g); out(g, pan, bus); o.start(t); o.stop(t + dur + .05);
+  }
+  // A bubble or water drop is a short sine whose pitch rises quickly.
+  const bubble = (t, f, dur, peak, pan) => tone(t, f, dur, {peak, attack:.004, glide:f * rnd(1.8, 2.6), pan});
+
+  // Deep pitched-down thump pushed through soft distortion, the "punch" of a blast.
+  function thump(t, f0, f1, dur, peak) {
+    const o = ctx.createOscillator(); o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const g = ctx.createGain(); env(g, t, peak, .004, dur);
+    o.connect(g); g.connect(grit); o.start(t); o.stop(t + dur + .05);
+  }
+  function explosion(t, size) {
+    noise(t, .09, {type:"highpass", f0:3500, f1:1200, peak:.55 * size, attack:.001});                 // crack
+    thump(t, 95, 26, .9 * size, .5 * size);                                                         // punch
+    noise(t, 1.5 * size, {brown:true, f0:2200, f1:110, peak:.95, attack:.004});                      // blast body
+    noise(t + .05, 3 * size, {brown:true, f0:260, f1:50, peak:.55 * size, attack:.12});              // rolling rumble
+    for (let k = 0; k < 12 * size; k++)                                                              // debris and crackle
+      noise(t + rnd(.08, 1.4 * size), rnd(.03, .09), {type:"bandpass", f0:rnd(700, 3200), f1:rnd(400, 1500), q:3, peak:rnd(.05, .16), pan:rnd(-.8, .8)});
+  }
+  function splash(t) {
+    bubble(t, 240, .13, .35, 0);                                                                     // plunk
+    tone(t, 130, .18, {peak:.22, glide:55});
+    noise(t + .01, 1, {f0:7000, f1:700, peak:.5, attack:.012});                                      // the splash itself
+    noise(t + .06, 1.6, {type:"highpass", f0:2500, f1:5500, peak:.12, attack:.06});                  // spray hiss
+    noise(t + .1, 1.4, {brown:true, f0:500, f1:180, peak:.3, attack:.15});                           // water surging back
+    for (let k = 0; k < 6; k++) bubble(t + rnd(.05, .45), rnd(280, 650), rnd(.05, .1), rnd(.05, .12), rnd(-.5, .5));
+    for (let k = 0; k < 20; k++) bubble(t + rnd(.25, 1.3), rnd(900, 2800), rnd(.03, .07), rnd(.025, .08), rnd(-.85, .85)); // droplets falling back
+  }
+  const fx = fn => { if (!prefs.sfx || !ensure()) return; fn(ctx.currentTime + .01); };
+
+  // Music: a slow shanty in D minor (Dm, Bb, F, C). Bass and pads first, the tune joins on alternate passes, with a swell of surf underneath.
+  const BEAT = 60 / 76, BARLEN = BEAT * 4;
+  const PROG = [
+    {bass:38, chord:[62, 65, 69], mel:[[0, 74], [1, 77], [1.5, 81], [2, 79], [3, 77]]},
+    {bass:34, chord:[58, 62, 65], mel:[[0, 74], [1, 77], [2, 74], [3, 72]]},
+    {bass:41, chord:[60, 65, 69], mel:[[0, 72], [1, 77], [2, 81], [3, 79]]},
+    {bass:36, chord:[60, 64, 67], mel:[[0, 76], [1, 79], [2.5, 76]]},
+  ];
+  function scheduleBar(t, n) {
+    const b = PROG[n % 4];
+    tone(t, hz(b.bass), BARLEN * .95, {type:"triangle", peak:.16, attack:.08}, musicBus);
+    tone(t + BEAT * 2, hz(b.bass + 12), BEAT * 1.6, {peak:.07, attack:.05}, musicBus);
+    b.chord.forEach(m => tone(t, hz(m), BARLEN, {peak:.035, attack:.9}, musicBus));
+    if (Math.floor(n / 4) % 2 === 1) b.mel.forEach(([o, m]) => tone(t + o * BEAT, hz(m), BEAT * .9, {type:"triangle", peak:.06}, musicBus));
+    if (n % 2 === 0) noise(t, BARLEN * 2, {f0:500, f1:250, peak:.035, attack:BARLEN * .9}, musicBus);
+  }
+  function startMusic() {
+    if (timer || !ensure()) return;
+    musicBus.gain.cancelScheduledValues(ctx.currentTime);
+    musicBus.gain.setTargetAtTime(.8, ctx.currentTime, .5);
+    nextBar = ctx.currentTime + .1; bar = 0;
+    timer = setInterval(() => {
+      if (nextBar < ctx.currentTime) nextBar = ctx.currentTime + .05;
+      while (nextBar < ctx.currentTime + .4) { scheduleBar(nextBar, bar++); nextBar += BARLEN; }
+    }, 100);
+  }
+  function stopMusic() {
+    if (timer) { clearInterval(timer); timer = null; }
+    if (ctx) { musicBus.gain.cancelScheduledValues(ctx.currentTime); musicBus.gain.setTargetAtTime(0, ctx.currentTime, .3); }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!ctx) return;
+    if (document.hidden) ctx.suspend(); else if (prefs.music || prefs.sfx) ctx.resume();
+  });
+
+  const api = {
+    prefs,
+    // Cannon: a sharp crack and boom, then the shell whistling away.
+    fire: () => fx(t => {
+      noise(t, .06, {type:"highpass", f0:3000, f1:1500, peak:.4, attack:.001});
+      thump(t, 130, 40, .45, .4);
+      noise(t, .7, {brown:true, f0:1600, f1:150, peak:.6});
+      tone(t + .08, 1900, .45, {type:"sine", peak:.035, glide:900, attack:.05});
+    }),
+    miss: () => fx(splash),
+    // Hit: a full blast plus the clang of torn steel.
+    hit: () => fx(t => {
+      explosion(t, 1);
+      [523, 1307, 1873].forEach((f, k) => tone(t + .02, f, .5 - k * .1, {type:"triangle", peak:.05, pan:rnd(-.3, .3)}));
+    }),
+    // Sunk: two blasts, the hull groaning as it goes under, then a column of bubbles.
+    sunk: () => fx(t => {
+      explosion(t, 1.3);
+      explosion(t + .38, 1);
+      const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 600; lp.connect(sfxBus);
+      [108, 112.5].forEach(f => tone(t + .7, f, 2.4, {type:"sawtooth", peak:.08, attack:.3, glide:42}, lp));
+      noise(t + .9, 2.6, {brown:true, f0:450, f1:120, peak:.35, attack:.8});
+      for (let k = 0; k < 28; k++) bubble(t + rnd(1, 3.4), rnd(180, 700), rnd(.05, .12), rnd(.04, .11), rnd(-.6, .6));
+    }),
+    cluster: () => fx(t => { for (let k = 0; k < 5; k++) explosion(t + k * .13 + rnd(0, .05), .55); }),
+    place: () => fx(t => tone(t, 520, .08, {type:"triangle", peak:.12, glide:380})),
+    ping: () => fx(t => { tone(t, hz(81), .35, {type:"triangle", peak:.15}); tone(t + .14, hz(86), .5, {type:"triangle", peak:.15}); }),
+    win: () => fx(t => [74, 78, 81, 86].forEach((m, k) => { const d = k === 3 ? 1.1 : .2; tone(t + k * .16, hz(m), d, {type:"triangle", peak:.22}); tone(t + k * .16, hz(m - 12), d, {type:"square", peak:.05}); })),
+    lose: () => fx(t => [69, 65, 62, 57].forEach((m, k) => tone(t + k * .32, hz(m), k === 3 ? 1.4 : .38, {type:"triangle", peak:.2}))),
+    result: res => res === "miss" ? api.miss() : res === "hit" ? api.hit() : res === "sunk" ? api.sunk() : null,
+    unlock: () => { if (prefs.music) startMusic(); else if (prefs.sfx) ensure(); },
+    toggleMusic: () => { prefs.music = !prefs.music; save(); prefs.music ? startMusic() : stopMusic(); },
+    toggleSfx: () => { prefs.sfx = !prefs.sfx; save(); api.place(); },
+  };
+  return api;
+})();
+function syncSoundButtons() {
+  const m = $("#musicBtn"), s = $("#sfxBtn");
+  m.setAttribute("aria-pressed", String(Sound.prefs.music)); m.textContent = Sound.prefs.music ? "Music on" : "Music off";
+  s.setAttribute("aria-pressed", String(Sound.prefs.sfx)); s.textContent = Sound.prefs.sfx ? "Effects on" : "Effects off";
+}
+$("#musicBtn").addEventListener("click", () => { Sound.toggleMusic(); syncSoundButtons(); });
+$("#sfxBtn").addEventListener("click", () => { Sound.toggleSfx(); syncSoundButtons(); });
+document.addEventListener("pointerdown", e => { if (!e.target.closest(".toggle")) Sound.unlock(); }, {once:false, capture:true});
+syncSoundButtons();
+
+// Placement keeps its state in P so a re-render from a live update doesn't lose it.
+function newPlacement() { return {fleet:[], sel:"carrier", across:true}; }
+let rotateHook = null;
+document.addEventListener("keydown", e => { if ((e.key === "r" || e.key === "R") && rotateHook && !e.target.closest("input")) rotateHook(); });
+function placementPanel(P, {heading, sub, readyLabel, onReady}) {
+  const root = h("section", {class:"side"});
+  const firstOpen = () => (SHIPS.find(s => !P.fleet.some(f => f.id === s.id)) || {}).id || null;
+  function draw() {
+    const board = makeBoard({ships:P.fleet, onCell:click, label:"Your waters"});
+    const sel = SHIPS.find(s => s.id === P.sel);
+    board.cells.forEach((cell, i) => cell.addEventListener("pointerenter", () => preview(board, i)));
+    board.addEventListener("pointerleave", () => preview(board, -1));
+    const done = P.fleet.length === SHIPS.length;
+    root.replaceChildren(
+      h("div", {class:"side"}, h("h2", {text:heading}), sub ? h("p", {class:"muted", text:sub}) : null),
+      h("div", {class:"place"}, board,
+        h("div", {class:"dock"},
+          h("h3", {text:"Your fleet"}),
+          SHIPS.map(s => {
+            const placed = P.fleet.some(f => f.id === s.id);
+            return h("button", {type:"button", class:"shipbtn" + (P.sel === s.id ? " sel" : "") + (placed ? " done" : ""),
+              onclick:() => { if (placed) P.fleet = P.fleet.filter(f => f.id !== s.id); P.sel = s.id; draw(); }},
+              h("span", {text:s.name + (placed ? " · placed" : "")}), pips(s.len));
+          }),
+          h("p", {class:"hint", text: sel ? `Tap a square to place your ${sel.name} (${sel.len}) ${P.across ? "across, to the right" : "down"}. Tap a placed ship to move it.` : "All ships placed. Tap one to move it, or deploy."}),
+          h("div", {class:"row"},
+            h("button", {type:"button", class:"btn ghost small", onclick:rotate}, `Rotate: ${P.across ? "across" : "down"}`),
+            h("button", {type:"button", class:"btn ghost small", onclick:() => { P.fleet = randomFleet(); P.sel = null; draw(); }}, "Random"),
+            h("button", {type:"button", class:"btn ghost small", onclick:() => { P.fleet = []; P.sel = "carrier"; draw(); }}, "Clear")),
+          h("button", {type:"button", class:"btn", disabled:!done, onclick:() => onReady(P.fleet.map(s => ({...s, cells:s.cells.slice()})))}, readyLabel))));
+  }
+  function rotate() { P.across = !P.across; draw(); }
+  function preview(board, i) {
+    board.cells.forEach(c => c.classList.remove("ok", "bad"));
+    const sel = SHIPS.find(s => s.id === P.sel);
+    if (i < 0 || !sel) return;
+    const cells = cellsFor(sel.len, i, P.across), ok = fits(P.fleet, cells);
+    cells.forEach(x => x >= 0 && board.cells[x].classList.add(ok ? "ok" : "bad"));
+  }
+  function click(i) {
+    const there = P.fleet.find(s => s.cells.includes(i));
+    const sel = SHIPS.find(s => s.id === P.sel);
+    if (sel) {
+      const cells = cellsFor(sel.len, i, P.across);
+      if (fits(P.fleet, cells)) { P.fleet.push({id:sel.id, name:sel.name, len:sel.len, cells}); P.sel = firstOpen(); Sound.place(); draw(); return; }
+      if (!there) { toast(`The ${sel.name} doesn't fit there. Try another square or rotate it.`); return; }
+    }
+    if (there) {
+      P.fleet = P.fleet.filter(s => s !== there);
+      P.sel = there.id; P.across = there.cells.length < 2 || there.cells[1] - there.cells[0] === 1;
+      draw();
+    }
+  }
+  rotateHook = rotate;
+  draw();
+  return root;
+}
+
+// ---------- app shell ----------
+let mode = "menu";
+$("#menuBtn").addEventListener("click", () => { mode = "menu"; render(); });
+
+function render() {
+  rotateHook = null;
+  $("#menuBtn").hidden = mode === "menu";
+  if (mode === "menu") renderMenu();
+  else if (mode === "local") renderLocal();
+  else if (mode === "board") renderBoard();
+  else renderOnline();
+}
+
+function renderMenu() {
+  setView(
+    h("p", {class:"muted", text:"The classic two-player naval battle. Hide your fleet on a 10 × 10 grid, then take turns calling shots until one navy is on the sea floor. Sink two ships in a row without missing to earn a cluster bomb."}),
+    h("div", {class:"fleetspec"}, SHIPS.map(s => h("span", null, h("b", {text:s.name}), " ", s.len))),
+    h("div", {class:"modes"},
+      h("div", {class:"mode"},
+        h("span", {class:"tag", text:"Two devices"}),
+        h("h2", {text:"Play online with a friend"}),
+        h("p", {text:"Start a game and send your opponent the link or the 4-letter code. You each play on your own phone or computer, and nobody can peek at the other fleet."}),
+        h("div", null, h("button", {type:"button", class:"btn", onclick:() => { mode = "online"; render(); }}, NET.code ? `Back to game ${NET.code}` : "Play online"))),
+      h("div", {class:"mode"},
+        h("span", {class:"tag", text:"One device"}),
+        h("h2", {text:"Pass and play"}),
+        h("p", {text:"Share one phone or laptop. A cover screen hides each fleet while you hand it over, so no peeking."}),
+        h("div", null, h("button", {type:"button", class:"btn", onclick:() => { mode = "local"; L = freshLocal(); render(); }}, "Start a game")))),
+    h("div", {class:"row"}, boardLink()));
+}
+const boardLink = () => h("button", {type:"button", class:"btn ghost", onclick:() => { mode = "board"; startBoard(); }}, "Leaderboard");
+
+// ---------- leaderboard ----------
+// The server records every finished two-device game. Pass-and-play games aren't recorded,
+// because nothing checks who really played them.
+const LB = {rows:null, failed:false};
+const gameId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+async function startBoard() {
+  LB.failed = false;
+  render();
+  try {
+    const r = await fetch("/api/leaderboard", {cache:"no-store"});
+    if (!r.ok) throw new Error();
+    LB.rows = (await r.json()).results;
+  } catch (e) { LB.failed = true; }
+  if (mode === "board") render();
+}
+function aggregate(rows) {
+  const by = new Map();
+  for (const r of rows) for (const p of r.p) {
+    let a = by.get(p.key);
+    if (!a) by.set(p.key, a = {key:p.key, name:"", games:0, wins:0, fired:0, hits:0, sunk:0, fastest:null, form:[]});
+    a.games++; a.fired += p.fired; a.hits += p.hits; a.sunk += p.sunk; a.form.push(p.won);
+    if (p.won) { const n = p.turns == null ? p.fired : p.turns; a.wins++; a.fastest = a.fastest == null ? n : Math.min(a.fastest, n); }
+    if (p.name && !a.name) a.name = p.name;
+  }
+  return [...by.values()].map(a => {
+    let n = 0; while (n < a.form.length && a.form[n] === a.form[0]) n++;
+    return {...a, pct:Math.round(a.wins / a.games * 100), acc:a.fired ? Math.round(a.hits / a.fired * 100) : 0, streak:a.form.length ? (a.form[0] ? "W" : "L") + n : "-"};
+  }).sort((x, y) => y.wins - x.wins || y.pct - x.pct || y.acc - x.acc);
+}
+function renderBoard() {
+  const head = h("div", {class:"side"}, h("h2", {text:"Leaderboard"}),
+    h("p", {class:"muted", text:"Every finished online game. Captains are matched by name, so use the same name each time you play."}));
+  if (LB.failed) { setView(head, statusBar("Couldn't load the leaderboard", "Check your connection and open it again.")); return; }
+  if (!LB.rows) { setView(head, statusBar("Loading the leaderboard…")); return; }
+  if (!LB.rows.length) {
+    setView(head, h("div", {class:"cover"}, h("h3", {text:"No battles recorded yet"}),
+      h("p", {class:"muted", text:"Finish an online game and the results show up here: wins, accuracy, ships sunk and fastest victory."})));
+    return;
+  }
+  const rows = aggregate(LB.rows);
+  const fmtDate = iso => { try { return new Date(iso).toLocaleDateString(undefined, {month:"short", day:"numeric"}); } catch (e) { return ""; } };
+  setView(head,
+    h("div", {class:"tablewrap"}, h("table", {class:"lb"},
+      h("thead", null, h("tr", null, ["#", "Captain", "Won", "Lost", "Win %", "Accuracy", "Ships sunk", "Fastest win", "Streak"].map(t => h("th", {scope:"col", text:t})))),
+      h("tbody", null, rows.map((a, k) => h("tr", {class:k === 0 && a.wins > 0 ? "top" : null},
+        h("td", {text:String(k + 1)}), h("td", {class:"who", text:a.name}),
+        h("td", {text:String(a.wins)}), h("td", {text:String(a.games - a.wins)}),
+        h("td", {text:a.pct + "%"}), h("td", {text:a.acc + "%"}), h("td", {text:String(a.sunk)}),
+        h("td", {text:a.fastest == null ? "-" : `${a.fastest} turns`}),
+        h("td", {class:a.streak[0] === "W" ? "streak-w" : "streak-l", text:a.streak})))))),
+    h("div", {class:"side"}, h("h3", {text:"Recent battles"}),
+      h("ol", {class:"log"}, LB.rows.slice(0, 10).map(r => {
+        const w = r.p.find(p => p.won), l = r.p.find(p => !p.won);
+        return h("li", null, h("span", {class:"mono muted", text:fmtDate(r.at)}),
+          `${w.name} beat ${l.name} in ${w.turns == null ? w.fired : w.turns} turns. ${l.name} sank ${l.sunk} of 5.`);
+      }))));
+}
+
+// ---------- pass and play ----------
+let L = null;
+function freshLocal(names) {
+  return {id:gameId(), phase: names ? "handoff" : "names", names: names || ["", ""], fleets:[null, null], shots:[[], []],
+    turn:0, fired:false, winner:null, place:newPlacement(), next: names ? {phase:"place", who:0} : null, who:0};
+}
+const lname = i => L.names[i] || `Player ${i + 1}`;
+function renderLocal() {
+  if (L.phase === "names") {
+    const go = e => {
+      e.preventDefault();
+      L.names = [$("#p1name").value.trim(), $("#p2name").value.trim()];
+      L.phase = "handoff"; L.next = {phase:"place", who:0}; render();
+    };
+    setView(h("form", {class:"side", onsubmit:go},
+      h("h2", {text:"Who's playing?"}),
+      h("div", {class:"names"},
+        h("label", {class:"field"}, "First player", h("input", {id:"p1name", placeholder:"Player 1", value:L.names[0], autocomplete:"off", maxlength:"20"})),
+        h("label", {class:"field"}, "Second player", h("input", {id:"p2name", placeholder:"Player 2", value:L.names[1], autocomplete:"off", maxlength:"20"}))),
+      h("div", null, h("button", {class:"btn", type:"submit"}, "Deploy fleets"))));
+    return;
+  }
+  if (L.phase === "handoff") {
+    const who = L.next.phase === "place" ? L.next.who : L.next.turn;
+    const lead = L.next.phase === "place" ? "Time to hide your ships." : (L.lastMsg || "Your turn to fire.");
+    setView(h("div", {class:"cover"},
+      h("h3", {text:"Hand over the device"}),
+      h("h2", {text:`${lname(who)}, you're up`}),
+      h("p", {class:"muted", text:`${lead} Make sure ${lname(1 - who)} isn't looking.`}),
+      h("button", {type:"button", class:"btn", onclick:() => {
+        Object.assign(L, {phase:L.next.phase}, L.next.phase === "place" ? {who:L.next.who, place:newPlacement()} : {turn:L.next.turn, fired:false});
+        render();
+      }}, `I'm ${lname(who)}, show my screen`)));
+    return;
+  }
+  if (L.phase === "place") {
+    setView(placementPanel(L.place, {
+      heading:`${lname(L.who)}, deploy your fleet`, sub:"Press R or use Rotate to turn a ship.", readyLabel:"Fleet ready",
+      onReady:fleet => {
+        L.fleets[L.who] = fleet;
+        L.next = L.who === 0 ? {phase:"place", who:1} : {phase:"play", turn:0};
+        L.lastMsg = null; L.phase = "handoff"; render();
+      }}));
+    return;
+  }
+  const t = L.turn, e = 1 - t, over = L.phase === "over";
+  if (over) {
+    setView(
+      statusBar(`${lname(L.winner)} wins the battle`, `Sank the whole fleet in ${turnsOf(L.shots[L.winner]).length} turns.`, true),
+      h("div", {class:"row"}, h("button", {type:"button", class:"btn", onclick:() => { L = freshLocal(L.names.slice()); render(); }}, "Rematch"), boardLink()),
+      recap([0, 1].map(k => ({name:lname(k), fleet:L.fleets[k], fired:L.shots[k]})), 0, L.winner));
+    return;
+  }
+  const fire = i => {
+    if (L.fired || over) return;
+    const planned = planShots(L.shots[t], i, !!L.armed);
+    if (!planned) return toast(L.armed ? "Every square in that block has already been hit. Pick another spot." : "You've already fired there.");
+    const readyBefore = bombState(L.shots[t]).ready;
+    Sound.fire();
+    L.shots[t] = resolvePending(L.fleets[e], L.shots[t].concat(planned));
+    const turn = L.shots[t].slice(-planned.length);
+    L.fired = true; L.armed = false;
+    turnBanner(turn, true, lname(t), lname(e));
+    L.earned = bombState(L.shots[t]).ready > readyBefore;
+    L.lastMsg = describeTurn(turn, lname(t));
+    if (allSunk(L.fleets[e], L.shots[t])) {
+      L.winner = t; L.phase = "over";
+      setTimeout(() => { announce(`${lname(t)} wins!`, `Every one of ${lname(e)}'s ships is sunk`, "win"); Sound.win(); }, 1500);
+    }
+    render();
+  };
+  const head = over
+    ? statusBar(`${lname(L.winner)} wins the battle`, `${L.shots[L.winner].length} shots fired. Both fleets are shown below.`, true)
+    : L.fired
+      ? statusBar(L.earned ? "Shot fired. Cluster bomb earned!" : "Shot fired", `${L.earned ? "Two ships sunk without a miss, so you can drop a cluster bomb next turn. " : ""}Hand the device to ${lname(e)} when you're ready.`, L.earned)
+      : statusBar(`${lname(t)}, call your shot`, L.lastMsg || `Tap a square in ${lname(e)}'s waters.`, true);
+  setView(head,
+    h("div", {class:"play"},
+      h("div", {class:"side"},
+        h("div", {class:"side-head"}, h("h3", {text:`${lname(e)}'s waters`}), h("span", {class:"muted mono", text:`${L.shots[t].length} shots`})),
+        !L.fired ? bombControl(L.shots[t], L.armed, true, () => { L.armed = !L.armed; render(); }) : null,
+        armPreview(makeBoard({ships: over ? L.fleets[e] : [], shots:L.shots[t], onCell: !L.fired && !over ? fire : null, allLive:L.armed && !L.fired, label:"Enemy waters"}), L.armed && !L.fired),
+        roster(`${lname(e)}'s fleet`, sunkIds(L.shots[t]))),
+      h("div", {class:"side"},
+        h("div", {class:"side-head"}, h("h3", {text:`${lname(t)}'s fleet`})),
+        makeBoard({ships:L.fleets[t], shots:L.shots[e], label:"Your fleet"}),
+        roster("Your losses", sunkIds(L.shots[e])))),
+    h("div", {class:"row"},
+      L.fired && !over ? h("button", {type:"button", class:"btn", onclick:() => { L.next = {phase:"play", turn:e}; L.phase = "handoff"; render(); }}, `Pass to ${lname(e)}`) : null,
+      over ? h("button", {type:"button", class:"btn", onclick:() => { L = freshLocal(L.names.slice()); render(); }}, "Rematch") : null));
+}
+
+// ---------- two devices ----------
+// The server holds both fleets and answers every shot, so neither page ever receives the
+// other player's ships until the game is over. Updates arrive live over an EventSource.
+const NET = {code:null, token:"", view:null, es:null, lost:false, place:newPlacement(), placeRound:null, armed:false, busy:false,
+  seenRound:null, seen:null, seenWinner:null, bombReady:0, wasMyTurn:null};
+const other = s => s === "A" ? "B" : "A";
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+const savedSeat = code => store.get("stf-seat-" + code);
+
+async function api(path, body) {
+  let r;
+  try { r = await fetch(path, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body || {})}); }
+  catch (e) { throw new Error("Couldn't reach the game server. Check your connection and try again."); }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const err = new Error(data.error || "Something went wrong. Try again."); err.status = r.status; throw err; }
+  return data;
+}
+async function act(path, body) {
+  if (NET.busy) return null;
+  NET.busy = true;
+  try { return await api(path, body); }
+  catch (e) { toast(e.message); return null; }
+  finally { NET.busy = false; if (mode === "online") render(); }
+}
+
+function connect(code, token) {
+  if (NET.es) NET.es.close();
+  Object.assign(NET, {code, token:token || "", view:null, lost:false, armed:false, seenRound:null, wasMyTurn:null});
+  if (token) store.set("stf-seat-" + code, {token});
+  NET.es = new EventSource(`/api/rooms/${code}/stream?token=${encodeURIComponent(NET.token)}`);
+  NET.es.onmessage = e => {
+    NET.view = JSON.parse(e.data); NET.lost = false;
+    noteNet(NET.view);
+    if (mode === "online") render();
+  };
+  NET.es.onerror = () => { NET.lost = true; if (mode === "online") render(); };
+  try { history.replaceState(null, "", "#" + code); } catch (e) {}
+  mode = "online";
+  render();
+}
+function disconnect() {
+  if (NET.es) NET.es.close();
+  Object.assign(NET, {code:null, token:"", view:null, es:null, lost:false, armed:false});
+  try { history.replaceState(null, "", location.pathname); } catch (e) {}
+}
+async function leaveGame() {
+  const v = NET.view;
+  if (v && v.seat && v.phase !== "play") { try { await api(`/api/rooms/${v.code}/leave`, {token:NET.token}); } catch (e) {} }
+  disconnect();
+  mode = "menu"; render();
+}
+
+async function joinGame(code, name) {
+  const saved = savedSeat(code);
+  try {
+    const r = await api(`/api/rooms/${code}/join`, {name, token:saved && saved.token});
+    connect(r.code, r.token);
+  } catch (e) {
+    if (e.status === 409 && /Both seats/.test(e.message)) { toast("Both seats are taken, so you're watching this game."); connect(code, ""); }
+    else toast(e.message);
+  }
+}
+
+// Announcements for new turns, earned bombs, your turn coming round, and the end of the game.
+function noteNet(v) {
+  const seat = v.seat;
+  const count = s => turnsOf(v.shots[s]).length;
+  const ready = () => seat ? bombState(v.shots[seat]).ready : 0;
+  const nm = s => (v.players[s] && v.players[s].name) || `Captain ${s}`;
+  const myTurn = v.phase === "play" && seat === v.turn;
+  if (NET.seenRound !== v.round) {
+    Object.assign(NET, {seenRound:v.round, seen:{A:count("A"), B:count("B")}, seenWinner:v.winner, bombReady:ready(), armed:false, wasMyTurn:myTurn});
+    return;
+  }
+  for (const s of ["A", "B"]) {
+    const n = count(s);
+    if (n > NET.seen[s]) {
+      NET.seen[s] = n;
+      if (mode === "online") turnBanner(turnsOf(v.shots[s])[n - 1], s === seat, nm(s), nm(other(s)));
+    }
+  }
+  if (ready() > NET.bombReady && mode === "online" && !v.winner) bombEarnedBanner(() => mode === "online" && NET.view && !NET.view.winner);
+  NET.bombReady = ready();
+  if (myTurn && NET.wasMyTurn === false && mode === "online") setTimeout(Sound.ping, 1200);
+  NET.wasMyTurn = myTurn;
+  if (v.winner && !NET.seenWinner) {
+    NET.seenWinner = v.winner;
+    setTimeout(() => {
+      if (mode !== "online") return;
+      announce(v.winner === seat ? "Victory!" : `${nm(v.winner)} wins!`, v.winner === seat ? "You sank the whole fleet" : seat ? "Your fleet is gone" : null, "win");
+      v.winner === seat || !seat ? Sound.win() : Sound.lose();
+    }, 1600);
+  }
+  if (!v.winner) NET.seenWinner = null;
+}
+
+function fireNet(i) {
+  const v = NET.view;
+  const planned = planShots(v.shots[v.seat], i, !!NET.armed);
+  if (!planned) return toast(NET.armed ? "Every square in that block has already been hit. Pick another spot." : "You've already fired there.");
+  const bomb = !!NET.armed;
+  NET.armed = false;
+  Sound.fire();
+  act(`/api/rooms/${v.code}/fire`, {token:NET.token, i, bomb});
+}
+
+function inviteBox(code) {
+  const link = `${location.origin}${location.pathname}#${code}`;
+  const btn = h("button", {type:"button", class:"btn small", onclick:async () => {
+    try { await navigator.clipboard.writeText(link); btn.textContent = "Copied"; setTimeout(() => btn.textContent = "Copy invite link", 1500); }
+    catch (e) { toast("Copy the link shown above."); }
+  }}, "Copy invite link");
+  return h("div", {class:"seat mine invite-box"},
+    h("h3", {text:"Invite your opponent"}),
+    h("div", {class:"code", text:code}),
+    h("p", {class:"muted", text:`Send them this link, or have them open ${location.host} and enter the code.`}),
+    h("p", {class:"invite", text:link}),
+    h("div", null, btn));
+}
+
+function renderLobby() {
+  const hashCode = (location.hash.slice(1) || "").toUpperCase();
+  const nameVal = () => { const n = $("#capname").value.trim(); store.set("stf-name", n); return n; };
+  const create = async e => {
+    e.preventDefault();
+    const r = await act("/api/rooms", {name:nameVal()});
+    if (r) connect(r.code, r.token);
+  };
+  const join = e => {
+    e.preventDefault();
+    const code = $("#joincode").value.trim().toUpperCase();
+    if (!/^[A-Z]{4}$/.test(code)) return toast("Enter the 4-letter game code.");
+    joinGame(code, nameVal());
+  };
+  setView(
+    h("div", {class:"side"}, h("h2", {text:"Play from two devices"}),
+      h("p", {class:"muted", text:"One of you starts a game and sends the other the link or the 4-letter code. The server keeps both fleets hidden until the game ends."})),
+    h("label", {class:"field", style:"max-width:320px"}, "Your captain name",
+      h("input", {id:"capname", value:store.get("stf-name") || "", placeholder:"e.g. Oliver", maxlength:"20", autocomplete:"nickname"})),
+    h("div", {class:"modes"},
+      h("form", {class:"mode", onsubmit:create},
+        h("span", {class:"tag", text:"New game"}),
+        h("p", {text:"Start a table and get a code to send your opponent."}),
+        h("div", null, h("button", {class:"btn", type:"submit", disabled:NET.busy}, "Start a game"))),
+      h("form", {class:"mode", onsubmit:join},
+        h("span", {class:"tag", text:"Join a game"}),
+        h("label", {class:"field"}, "Game code",
+          h("input", {id:"joincode", class:"codeinput", value:/^[A-Z]{4}$/.test(hashCode) ? hashCode : "", placeholder:"ABCD", maxlength:"4", autocomplete:"off", autocapitalize:"characters"})),
+        h("div", null, h("button", {class:"btn", type:"submit", disabled:NET.busy}, "Join")))));
+}
+
+function renderOnline() {
+  if (!NET.code) return renderLobby();
+  const v = NET.view;
+  const leaveBtn = h("button", {type:"button", class:"link", onclick:leaveGame}, "Leave this game");
+  if (!v) {
+    setView(
+      statusBar(NET.lost ? "Can't reach this game" : "Connecting to the table…",
+        NET.lost ? "The game may have ended, or the server restarted. Leave and start a new game if it doesn't come back." : null),
+      h("div", {class:"row"}, leaveBtn));
+    return;
+  }
+  const seat = v.seat, nm = s => (v.players[s] && v.players[s].name) || null;
+  const lost = NET.lost ? statusBar("Reconnecting…", "Lost the connection to the game server. The game picks up again when it's back.") : null;
+  const P = () => ["A", "B"].map(s => ({name:nm(s) || `Captain ${s}`, fleet:v.reveal ? v.reveal[s] : null, fired:v.shots[s]}));
+
+  if (!seat) {
+    setView(lost,
+      statusBar("You're watching this game", `${nm("A") || "Captain A"} vs ${nm("B") || "Captain B"}`),
+      v.phase === "over" ? recap(P(), v.first === "A" ? 0 : 1, v.winner === "A" ? 0 : 1)
+        : h("div", {class:"play"}, ["A", "B"].map(s => h("div", {class:"side"},
+          h("h3", {text:`${nm(s) || "Captain " + s}'s shots`}), makeBoard({shots:v.shots[s], label:`${nm(s)}'s shots`})))),
+      h("div", {class:"row"}, leaveBtn));
+    return;
+  }
+  const opp = other(seat), oppName = nm(opp) || "your opponent", oppHere = !!v.players[opp];
+  const oppAway = oppHere && !v.players[opp].online ? ` ${oppName} isn't connected right now.` : "";
+
+  if (v.phase === "setup") {
+    if (!v.fleet) {
+      if (NET.placeRound !== v.round) { NET.place = newPlacement(); NET.placeRound = v.round; }
+      setView(lost,
+        statusBar(`Game ${v.code}`, oppHere ? `${oppName} is at the table.${oppAway}` : "Waiting for your opponent to join.", false),
+        oppHere ? null : inviteBox(v.code),
+        placementPanel(NET.place, {heading:"Deploy your fleet", sub:"Your opponent can't see where these go. Press R or use Rotate to turn a ship.",
+          readyLabel:"Deploy fleet", onReady:fleet => act(`/api/rooms/${v.code}/fleet`, {token:NET.token, ships:fleet})}),
+        h("div", {class:"row"}, leaveBtn));
+      return;
+    }
+    setView(lost,
+      statusBar("Fleet deployed", oppHere ? `Waiting for ${oppName} to place their ships.${oppAway}` : "Waiting for your opponent to join.", false),
+      oppHere ? null : inviteBox(v.code),
+      h("div", {class:"side"}, h("h3", {text:"Your fleet"}), makeBoard({ships:v.fleet, label:"Your fleet"})),
+      h("div", {class:"row"}, leaveBtn));
+    return;
+  }
+
+  if (v.phase === "over") {
+    setView(lost,
+      statusBar(v.winner === seat ? "Victory. Their whole fleet is sunk." : `${oppName} sank your fleet`, "Both fleets are uncovered in the recap below.", true),
+      h("div", {class:"row"},
+        h("button", {type:"button", class:"btn", disabled:NET.busy, onclick:() => act(`/api/rooms/${v.code}/rematch`, {token:NET.token})}, "Rematch"),
+        boardLink(), leaveBtn),
+      recap(P(), v.first === "A" ? 0 : 1, v.winner === "A" ? 0 : 1));
+    return;
+  }
+
+  const mine = v.shots[seat], theirs = v.shots[opp];
+  const myTurn = v.turn === seat && !NET.lost;
+  const head = myTurn ? statusBar("Your shot", `Tap a square in ${oppName}'s waters.${oppAway}`, true)
+    : statusBar(`${oppName} is aiming…`, `You'll see their shot land on your fleet.${oppAway}`, false);
+  setView(lost, head,
+    h("div", {class:"play"},
+      h("div", {class:"side"},
+        h("div", {class:"side-head"}, h("h3", {text:`${oppName}'s waters`}), h("span", {class:"muted mono", text:`${mine.length} shots`})),
+        bombControl(mine, NET.armed && myTurn, myTurn && !NET.busy, () => { NET.armed = !NET.armed; render(); }),
+        armPreview(makeBoard({shots:mine, onCell:myTurn && !NET.busy ? fireNet : null, allLive:NET.armed && myTurn, label:"Enemy waters"}), NET.armed && myTurn),
+        roster(`${oppName}'s fleet`, sunkIds(mine))),
+      h("div", {class:"side"},
+        h("div", {class:"side-head"}, h("h3", {text:"Your fleet"})),
+        makeBoard({ships:v.fleet || [], shots:theirs, label:"Your fleet"}),
+        roster("Your losses", sunkIds(theirs)))),
+    h("div", {class:"row"}, h("span", {class:"hint", text:`Game ${v.code}`})));
+}
+
+// ---------- boot ----------
+render();
+(() => {
+  const code = (location.hash.slice(1) || "").toUpperCase();
+  if (!/^[A-Z]{4}$/.test(code)) return;
+  const saved = savedSeat(code);
+  if (saved && saved.token) joinGame(code, store.get("stf-name") || "");
+  else { mode = "online"; render(); }
+})();
+</script>
+</body>
+</html>

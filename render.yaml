@@ -1,0 +1,18 @@
+# One-click deploy on Render: https://render.com/deploy?repo=https://github.com/olivere91/Claude-
+services:
+  - type: web
+    name: sink-the-fleet
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    # The free plan has no permanent storage, so the leaderboard resets whenever the
+    # server restarts. To keep it, switch to a paid plan and uncomment the disk below.
+    # envVars:
+    #   - key: DATA_DIR
+    #     value: /var/data
+    # disk:
+    #   name: leaderboard
+    #   mountPath: /var/data
+    #   sizeGB: 1
